@@ -111,6 +111,13 @@ footer a{color:var(--dim)}
 .bd .c{background:var(--panel);padding:12px 10px;text-align:center}
 .bd .c .k{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:5px}
 .bd .c .v{font-family:var(--mono);font-size:15px;font-weight:700}
+.newsrow{padding:12px 18px;border-bottom:1px solid var(--line);font-size:12.5px}
+.newsrow:last-child{border-bottom:none}
+.newsmeta{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.newslabel{color:var(--text);line-height:1.5}
+.newshead{font-family:var(--mono);font-size:11.5px;color:var(--dim);padding:5px 0 5px 14px;border-left:2px solid var(--line);margin-top:4px}
+.tag.veto{background:var(--flt-dim);color:var(--flt)}
+.tag.provider{background:var(--panel);color:var(--faint);border:1px solid var(--line)}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 </style>
 </head>
@@ -146,6 +153,7 @@ footer a{color:var(--dim)}
 <div id="detail" style="display:none">
   <div class="sec"><span id="dTitle">Detail</span> &nbsp;·&nbsp; <a href="#" id="back" style="color:var(--acc);font-weight:700;font-size:13px;text-decoration:underline">&larr; Back to board</a></div>
   <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox">—</div></div>
+  <div class="panel"><div class="ptitle"><span>News read</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">Qwen -&gt; Groq</span></div><div id="newsBox"></div></div>
   <div class="panel"><div class="ptitle"><span>Conviction pulse</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">last 60 cycles</span></div>
     <div class="pulsewrap">
       <div class="pulse-legend"><span><i class="sw dx"></i>Diagnosed</span><span><i class="sw inc"></i>Inconclusive</span><span><i class="sw flt"></i>Fault</span></div>
@@ -283,9 +291,23 @@ function renderBreakdown(rows){
   $('bdLong').textContent=longs;$('bdShort').textContent=shorts;$('bdAvg').textContent=avg;
   $('bdNet').textContent=fm(net);
 }
+function renderNews(news){
+  var box=$('newsBox');
+  if(!news){box.innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12px;color:var(--faint)">No news check yet for this pair.</div>';return}
+  var statusHtml=news.veto?'<span class="tag veto">EVENT-RISK VETO</span>':'<span class="tag '+(news.bias==='up'?'dx':news.bias==='down'?'flt':'inc')+'">'+(news.bias||'neutral').toUpperCase()+'</span>';
+  var provHtml='<span class="tag provider">'+(news.provider||'none')+'</span>';
+  var confHtml=news.confidence?'<span style="font-family:var(--mono);font-size:11px;color:var(--dim)">'+news.confidence+'/100 confidence</span>':'';
+  var headsHtml=(news.headlines&&news.headlines.length)?news.headlines.slice(0,8).map(function(h){return '<div class="newshead">'+h+'</div>'}).join(''):'<div style="padding:8px 0;color:var(--faint);font-family:var(--mono);font-size:11.5px">No headlines returned for this pair.</div>';
+  box.innerHTML='<div class="newsrow"><div class="newsmeta">'+statusHtml+provHtml+confHtml+'</div>'+
+    '<div class="newslabel">'+(news.label||'No summary.')+'</div>'+
+    headsHtml+
+    '<div style="margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--faint)">checked '+ft(news.checkedAt)+'</div></div>';
+}
 async function detail(pair){
   try{var s=await J('/status');var pos=s.openPositions?s.openPositions[pair]:null;
     await renderOpenPosition(pair,pos);
+    var d=s.lastDecisionByPair?s.lastDecisionByPair[pair]:null;
+    renderNews(d?d.news:null);
   }catch(e){$('openBox').innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12.5px">Could not load position.</div>'}
   try{var l=await J('/log?n=80&pair='+encodeURIComponent(pair));
     $('logN').textContent=l.length+' entries';

@@ -208,6 +208,7 @@ function mergeNewsIntoDiagnostic(diagnostic, news, thresholds) {
       state: 'FAULT',
       convictionScore: Math.min(diagnostic.convictionScore, 20),
       reason: `${diagnostic.reason} LLM event-risk veto (${news.provider}): ${news.label}.`,
+      news,
     };
   }
   if (news.value !== 0) {
@@ -218,14 +219,20 @@ function mergeNewsIntoDiagnostic(diagnostic, news, thresholds) {
       convictionScore: adjusted,
       state,
       reason: `${diagnostic.reason} News layer (${news.provider}): ${news.label}.`,
+      news,
     };
   }
-  return diagnostic;
+  return { ...diagnostic, news };
 }
 
 module.exports = {
   newsSignal,
   mergeNewsIntoDiagnostic,
+  callOpenAICompatible,
+  providers: {
+    qwen: { baseUrl: QWEN_BASE_URL, apiKey: QWEN_API_KEY, model: QWEN_MODEL },
+    groq: { baseUrl: GROQ_BASE_URL, apiKey: GROQ_API_KEY, model: GROQ_MODEL },
+  },
   // exported for unit testing only
   _internals: { buildNewsPrompt, parseLLMResponse, llmToSignal },
 };

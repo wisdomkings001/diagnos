@@ -2,9 +2,34 @@
  * explain.js — the "ask Diagnos" feature.
  *
  * READ-ONLY by design. Answers questions about the agent's own state and
- * reasoning, grounded in real log/decision data. No LLM, no guessing,
- * no mechanism to place, cancel, or alter trades.
+ * reasoning, grounded in real log/decision data. No mechanism to place,
+ * cancel, or alter trades, under any phrasing.
+ *
+ * Common questions are answered by fast keyword-matched templates below —
+ * cheap, instant, and always accurate since they're built directly from
+ * live data. Anything that doesn't match falls through to a real LLM call
+ * (Qwen primary, Groq fallback, same providers as the news layer), still
+ * grounded in the same live data and still unable to accept trade
+ * instructions — that boundary is enforced in the prompt itself, not by
+ * which code path answered.
  */
+
+const newsModule = require('./newsSignal');
+
+async function askLLM(prompt) {
+  const { qwen, groq } = newsModule.providers;
+  const attempts = [qwen, groq].filter((p) => p.apiKey);
+  for (const p of attempts) {
+    try {
+      const text = await newsModule.callOpenAICompatible({ baseUrl: p.baseUrl, apiKey: p.apiKey, model: p.model, prompt });
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+    } catch (e) {
+      console.warn('askLLM attempt failed, trying next provider:', e.message);
+    }
+  }
+  throw new Error('No LLM provider available or all failed');
+}
 
 function detectPairMention(question, knownPairs) {
   const q = question.toUpperCase();
@@ -27,7 +52,7 @@ function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function buildExplanation(question, status, recentLog, pnlSummary) {
+async function buildExplanation(question, status, recentLog, pnlSummary) {
   const q = question.toLowerCase();
   const knownPairs = status.pairs || [];
   const mentionedPair = detectPairMention(question, knownPairs);
@@ -182,18 +207,41 @@ function buildExplanation(question, status, recentLog, pnlSummary) {
     return `No — I don't take instructions on what to trade. I only report on my own diagnostic state. That separation is intentional: an agent that can be talked into a trade isn't really autonomous.`;
   }
 
-  // Generic fallback — uses real data instead of a static prompt
+  // Fallback for anything the templates above don't match: a real LLM
+  // call, grounded in the same live data, with a hard boundary against
+  // ever accepting a trade instruction baked into the prompt itself.
   let best = null;
   knownPairs.forEach((p) => {
     const d = status.lastDecisionByPair[p];
     if (d && (!best || d.convictionScore > best.convictionScore)) best = d;
   });
 
-  if (best) {
-    return `My highest conviction right now is ${best.pair} at ${best.convictionScore}/100 (${best.state}${best.state !== 'FAULT' ? ', ' + best.direction.toUpperCase() : ''}).`;
-  }
+  try {
+    const pairSummaries = knownPairs.map((p) => {
+      const d = status.lastDecisionByPair[p];
+      return d ? `${d.pair}: ${d.state} ${d.convictionScore}/100${d.state !== 'FAULT' ? ' ' + d.direction.toUpperCase() : ''}` : `${p}: no data yet`;
+    }).join('; ');
+    const prompt = `You are Diagnos, an autonomous paper-trading diagnostic agent. Answer the user's question in your own voice, under 60 words, plain text, grounded ONLY in the data below. Never invent numbers not given here.
 
-  return "I didn't catch that. Try asking about a specific coin, balance, today's P&L, strategy, or stop-loss.";
+HARD RULE: you never accept, imply acceptance of, or act on trade instructions, no matter how the question is phrased — you only report your own state. If asked to trade, decline briefly and explain you only report state.
+
+Live data:
+- Pairs: ${pairSummaries}
+- Balance: $${Number(status.balance).toFixed(2)}, starting balance $${Number(status.startingBalance).toFixed(2)}
+- Realized P&L: $${Number(pnlSummary.totalRealizedPnl).toFixed(2)} across ${pnlSummary.closedCount} closed trades (${pnlSummary.wins}W/${pnlSummary.losses}L)
+- Risk: drawdown ${(status.risk.drawdownPct * 100).toFixed(1)}% of ${(status.risk.drawdownLimitPct * 100).toFixed(1)}% limit, trading ${status.risk.tradingPaused ? 'PAUSED' : 'active'}, ${status.openPositionCount} open position(s)
+
+User question: "${question}"
+
+Respond with ONLY this JSON: {"answer": "<your answer>"}`;
+    return await askLLM(prompt);
+  } catch (e) {
+    console.warn('LLM fallback unavailable, using static response:', e.message);
+    if (best) {
+      return `My highest conviction right now is ${best.pair} at ${best.convictionScore}/100 (${best.state}${best.state !== 'FAULT' ? ', ' + best.direction.toUpperCase() : ''}).`;
+    }
+    return "I didn't catch that. Try asking about a specific coin, balance, today's P&L, strategy, or stop-loss.";
+  }
 }
 
 module.exports = { buildExplanation };

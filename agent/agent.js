@@ -446,7 +446,7 @@ function executeCycle(pair, diagnostic, currentPrice) {
   state.pairs[pair].lastDecision = {
     timestamp, pair, state: diagnostic.state, convictionScore: diagnostic.convictionScore,
     direction, price: currentPrice, quantity: qty, balanceChange, balanceAfter: state.balance,
-    reason: diagnostic.reason, detail: diagnostic.detail,
+    reason: diagnostic.reason, detail: diagnostic.detail, news: diagnostic.news || null,
   };
   saveState(state);
 
@@ -558,6 +558,8 @@ async function runOnePair(pair) {
       try {
         const headlines = await fetchHeadlinesForPair(pair);
         const news = await newsModule.newsSignal(pair, headlines);
+        news.headlines = headlines;
+        news.checkedAt = new Date().toISOString();
         diagnostic = newsModule.mergeNewsIntoDiagnostic(diagnostic, news, {
           fault: CONFIG.FAULT_THRESHOLD,
           diagnosed: CONFIG.DIAGNOSED_THRESHOLD,
@@ -694,7 +696,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/ask' && req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => {
+    req.on('end', async () => {
       let question = '';
       try { question = JSON.parse(body).question || ''; } catch (_) { /* malformed body, fall through */ }
       const statusPayload = buildStatusPayload();
@@ -706,7 +708,13 @@ const server = http.createServer((req, res) => {
         losses: closedTrades.filter((r) => r.realizedPnl < 0).length,
         closedCount: closedTrades.length,
       };
-      const answer = buildExplanation(question, statusPayload, recentLog, pnlSummary);
+      let answer;
+      try {
+        answer = await buildExplanation(question, statusPayload, recentLog, pnlSummary);
+      } catch (e) {
+        console.warn('buildExplanation failed:', e.message);
+        answer = "I ran into an error answering that — try rephrasing, or ask about a specific pair, risk, or news.";
+      }
       res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders() });
       res.end(JSON.stringify({ answer }));
     });
