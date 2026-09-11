@@ -265,7 +265,7 @@ function renderRisk(r){
 async function topPnl(){
   try{var p=await J('/pnl?n=9999');var t=p.totalRealizedPnl||0;
     var e=$('pnlV');e.textContent=fm(t);e.className='v '+(Math.abs(t)<0.0001?'':(t>0?'up':'down'));
-    if(last){var b=last.balance!=null?last.balance:10000;var net=b-(last.startingBalance||10000);var fee=t-net;$('balS').textContent='balance '+fm(b)+' · fees '+fm(Math.abs(fee));}
+    if(last){var b=last.balance!=null?last.balance:10000;$('balS').textContent='balance '+fm(b);}
   }catch(e){}
 }
 function openD(p){active=p;history.pushState({detail:p},'');$('overview').style.display='none';$('detail').style.display='block';$('dTitle').textContent=fp(p);detail(p);window.scrollTo(0,0)}
