@@ -88,6 +88,29 @@ footer a{color:var(--dim)}
 .sec{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:0 0 10px}
 .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start;margin-bottom:18px}
 @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+.op-row{display:flex;justify-content:space-between;padding:9px 18px;border-bottom:1px solid var(--line);font-size:12.5px}
+.op-row:last-of-type{border-bottom:none}
+.op-label{color:var(--faint);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.op-value{font-family:var(--mono);font-weight:700}
+.op-pnl-positive{color:var(--dx)} .op-pnl-negative{color:var(--flt)}
+.op-progress-wrap{padding:14px 18px}
+.op-progress-label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:8px}
+.op-progress-track{height:6px;background:var(--line);border-radius:4px;overflow:hidden}
+.op-progress-fill{display:block;height:100%;background:var(--acc);border-radius:4px;transition:width .3s}
+.op-progress-fill.op-stop-warn{background:var(--flt)}
+.pulsewrap{padding:16px 18px 6px}
+.pulse-legend{display:flex;gap:14px;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-bottom:10px}
+.pulse-legend span{display:flex;align-items:center;gap:5px}
+.pulse-legend .sw{width:8px;height:8px;border-radius:50%}
+.sw.dx{background:var(--dx)} .sw.inc{background:var(--inc)} .sw.flt{background:var(--flt)}
+#pulseSvg{width:100%;height:160px;display:block}
+.pulse-empty{font-family:var(--mono);font-size:12px;color:var(--faint);text-align:center;padding:50px 0}
+.bd{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line)}
+@media(max-width:760px){.bd{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:480px){.bd{grid-template-columns:repeat(3,1fr)}}
+.bd .c{background:var(--panel);padding:12px 10px;text-align:center}
+.bd .c .k{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:5px}
+.bd .c .v{font-family:var(--mono);font-size:15px;font-weight:700}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 </style>
 </head>
@@ -104,6 +127,7 @@ footer a{color:var(--dim)}
 <div class="conn" id="conn">Could not reach the agent endpoint.
   <div class="row"><input id="epIn" placeholder="https://your-agent.up.railway.app"><button id="epGo">Connect</button></div>
 </div>
+<div id="overview">
 <div class="cards">
   <div class="card"><div class="k">Realized P&amp;L</div><div class="v" id="pnlV">$0.00</div><div class="s" id="balS">balance —</div></div>
   <div class="card"><div class="k">Diagnosed</div><div class="v" id="dxN" style="color:var(--dx)">0</div><div class="s">full conviction</div></div>
@@ -118,9 +142,28 @@ footer a{color:var(--dim)}
 </div>
 <div class="sec">Pairs — tap any coin for detail</div>
 <div class="panel"><div class="grid" id="grid"></div></div>
+</div>
 <div id="detail" style="display:none">
-  <div class="sec"><span id="dTitle">Detail</span> &nbsp;·&nbsp; <a href="#" id="back" style="color:var(--acc)">Back to board</a></div>
-  <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox" style="padding:16px 18px;font-family:var(--mono);font-size:12.5px">—</div></div>
+  <div class="sec"><span id="dTitle">Detail</span> &nbsp;·&nbsp; <a href="#" id="back" style="color:var(--acc);font-weight:700;font-size:13px;text-decoration:underline">&larr; Back to board</a></div>
+  <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox">—</div></div>
+  <div class="panel"><div class="ptitle"><span>Conviction pulse</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">last 60 cycles</span></div>
+    <div class="pulsewrap">
+      <div class="pulse-legend"><span><i class="sw dx"></i>Diagnosed</span><span><i class="sw inc"></i>Inconclusive</span><span><i class="sw flt"></i>Fault</span></div>
+      <svg id="pulseSvg" viewBox="0 0 1000 160" preserveAspectRatio="none"></svg>
+      <div class="pulse-empty" id="pulseEmpty" style="display:none">No diagnostic cycles logged yet for this pair.</div>
+    </div>
+  </div>
+  <div class="panel"><div class="ptitle"><span>Breakdown</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">this window</span></div>
+    <div class="bd">
+      <div class="c"><div class="k">Diagnosed</div><div class="v" id="bdDx" style="color:var(--dx)">0</div></div>
+      <div class="c"><div class="k">Inconclusive</div><div class="v" id="bdInc" style="color:var(--inc)">0</div></div>
+      <div class="c"><div class="k">Fault</div><div class="v" id="bdFlt" style="color:var(--flt)">0</div></div>
+      <div class="c"><div class="k">Long</div><div class="v" id="bdLong" style="color:var(--dx)">0</div></div>
+      <div class="c"><div class="k">Short</div><div class="v" id="bdShort" style="color:var(--flt)">0</div></div>
+      <div class="c"><div class="k">Avg conviction</div><div class="v" id="bdAvg">0</div></div>
+      <div class="c"><div class="k">Net impact</div><div class="v" id="bdNet">$0.00</div></div>
+    </div>
+  </div>
   <div class="grid2">
     <div class="panel"><div class="ptitle"><span>Diagnostic log</span><span id="logN"></span></div><div class="log" id="log"></div></div>
     <div class="panel"><div class="ptitle"><span>Closed trades</span><span id="pnlN"></span></div><div class="log" id="pnl"></div></div>
@@ -183,14 +226,70 @@ async function topPnl(){
     if(last){var b=last.balance!=null?last.balance:10000;var net=b-(last.startingBalance||10000);var fee=t-net;$('balS').textContent='balance '+fm(b)+' · fees '+fm(Math.abs(fee));}
   }catch(e){}
 }
-function openD(p){active=p;$('detail').style.display='block';$('dTitle').textContent=fp(p);detail(p);window.scrollTo(0,0)}
-$('back').onclick=function(e){e.preventDefault();active=null;$('detail').style.display='none'};
+function openD(p){active=p;history.pushState({detail:p},'');$('overview').style.display='none';$('detail').style.display='block';$('dTitle').textContent=fp(p);detail(p);window.scrollTo(0,0)}
+function closeDetail(){active=null;$('detail').style.display='none';$('overview').style.display='block'}
+$('back').onclick=function(e){e.preventDefault();history.back()};
+window.addEventListener('popstate',function(){if(active)closeDetail()});
+var HOLD_MS=60*60*1000,STOP_LOSS_PCT=0.02; // matches agent.js CONFIG.POSITION_HOLD_MS / STOP_LOSS_PCT
+async function renderOpenPosition(pair,pos){
+  if(!pos){$('openBox').innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12.5px;color:var(--faint)">No open position on this pair.</div>';return}
+  var currentPrice=Number(pos.entryPrice);
+  try{var pd=await J('/price/'+pair);if(pd&&pd.price)currentPrice=pd.price}catch(e){}
+  var entryPrice=Number(pos.entryPrice),qty=Number(pos.quantity),direction=pos.direction;
+  var openedAt=new Date(pos.openedAt),now=new Date(),elapsedMs=now-openedAt;
+  var holdPct=Math.min(100,Math.round((elapsedMs/HOLD_MS)*100));
+  var elapsedMins=Math.floor(elapsedMs/60000),remainMins=Math.max(0,60-elapsedMins);
+  var rawPnl=direction==='long'?(currentPrice-entryPrice)*qty:(entryPrice-currentPrice)*qty;
+  var pnlClass=rawPnl>=0?'op-pnl-positive':'op-pnl-negative';
+  var pnlText=(rawPnl>=0?'+':'-')+'$'+Math.abs(rawPnl).toFixed(2);
+  var moveAgainst=direction==='long'?((entryPrice-currentPrice)/entryPrice):((currentPrice-entryPrice)/entryPrice);
+  var stopPct=Math.max(0,Math.min(100,Math.round((moveAgainst/STOP_LOSS_PCT)*100)));
+  var nearStop=stopPct>=70;
+  $('openBox').innerHTML=
+    '<div class="op-row"><span class="op-label">Direction</span><span class="op-value" style="color:'+(direction==='long'?'var(--dx)':'var(--flt)')+'">'+direction.toUpperCase()+'</span></div>'+
+    '<div class="op-row"><span class="op-label">Opened</span><span class="op-value">'+ft(pos.openedAt)+'</span></div>'+
+    '<div class="op-row"><span class="op-label">Entry price</span><span class="op-value">$'+entryPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:6})+'</span></div>'+
+    '<div class="op-row"><span class="op-label">Current price</span><span class="op-value">$'+currentPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:6})+'</span></div>'+
+    '<div class="op-row"><span class="op-label">Unrealized P&amp;L</span><span class="op-value '+pnlClass+'">'+pnlText+'</span></div>'+
+    '<div class="op-row"><span class="op-label">Stop-loss proximity</span><span class="op-value" style="color:'+(nearStop?'var(--flt)':'var(--dim)')+'">'+stopPct+'% of 2% threshold</span></div>'+
+    '<div class="op-progress-wrap"><div class="op-progress-label"><span>Hold window — '+elapsedMins+'min elapsed</span><span>'+remainMins+'min remaining</span></div>'+
+    '<div class="op-progress-track"><div class="op-progress-fill'+(nearStop?' op-stop-warn':'')+'" style="width:'+holdPct+'%"></div></div></div>';
+}
+function drawPulse(rows){
+  var svg=$('pulseSvg'),emptyEl=$('pulseEmpty');
+  if(!rows.length){svg.style.display='none';emptyEl.style.display='block';return}
+  svg.style.display='block';emptyEl.style.display='none';
+  var data=rows.slice(-60);var w=1000,h=160,pad=14;
+  var stepX=data.length>1?(w-pad*2)/(data.length-1):0;
+  var points=data.map(function(r,i){return {x:pad+i*stepX,y:h-pad-(r.convictionScore/100)*(h-pad*2),state:r.state}});
+  var path='M '+points[0].x+' '+points[0].y;
+  for(var i=1;i<points.length;i++){path+=' L '+points[i].x+' '+points[i].y}
+  var svgContent='';
+  [30,70].forEach(function(t){var y=h-pad-(t/100)*(h-pad*2);svgContent+='<line x1="'+pad+'" y1="'+y+'" x2="'+(w-pad)+'" y2="'+y+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4" />'});
+  svgContent+='<path d="'+path+'" fill="none" stroke="var(--line2)" stroke-width="2" />';
+  points.forEach(function(p){svgContent+='<circle cx="'+p.x+'" cy="'+p.y+'" r="3" fill="'+col(p.state)+'" />'});
+  svg.innerHTML=svgContent;
+}
+function renderBreakdown(rows){
+  if(!rows.length){['bdDx','bdInc','bdFlt','bdLong','bdShort'].forEach(function(id){$(id).textContent='0'});$('bdAvg').textContent='0';$('bdNet').textContent='$0.00';return}
+  var dx=rows.filter(function(r){return r.state==='DIAGNOSED'}).length;
+  var inc=rows.filter(function(r){return r.state==='INCONCLUSIVE'}).length;
+  var flt=rows.filter(function(r){return r.state==='FAULT'}).length;
+  var longs=rows.filter(function(r){return r.direction==='long'}).length;
+  var shorts=rows.filter(function(r){return r.direction==='short'}).length;
+  var avg=Math.round(rows.reduce(function(s,r){return s+r.convictionScore},0)/rows.length);
+  var net=rows.reduce(function(s,r){return s+(r.balanceChange||0)},0);
+  $('bdDx').textContent=dx;$('bdInc').textContent=inc;$('bdFlt').textContent=flt;
+  $('bdLong').textContent=longs;$('bdShort').textContent=shorts;$('bdAvg').textContent=avg;
+  $('bdNet').textContent=fm(net);
+}
 async function detail(pair){
   try{var s=await J('/status');var pos=s.openPositions?s.openPositions[pair]:null;
-    $('openBox').textContent=pos?((pos.direction||'').toUpperCase()+' entry '+pos.entryPrice+' qty '+pos.quantity+' opened '+ft(pos.openedAt)):'No open position on this pair.';
-  }catch(e){$('openBox').textContent='Could not load position.'}
+    await renderOpenPosition(pair,pos);
+  }catch(e){$('openBox').innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12.5px">Could not load position.</div>'}
   try{var l=await J('/log?n=80&pair='+encodeURIComponent(pair));
     $('logN').textContent=l.length+' entries';
+    drawPulse(l);renderBreakdown(l);
     $('log').innerHTML=l.slice().reverse().slice(0,60).map(function(r){
       return '<div class="lrow"><span class="tm">'+ft(r.timestamp)+'</span><span class="tag '+cls(r.state)+'">'+r.state+'</span><span class="rs">'+((r.direction||'').toUpperCase())+' — '+(r.reason||'')+' '+newsTag(r.reason)+'</span><span style="font-family:var(--mono);text-align:right">'+r.convictionScore+'</span></div>';
     }).join('')||'<div style="padding:16px;color:var(--faint)">No entries yet.</div>';
