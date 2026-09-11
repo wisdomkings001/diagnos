@@ -1,5 +1,5 @@
 /**
- * explain.js — the "ask Continuity" feature.
+ * explain.js — the "ask Diagnos" feature.
  *
  * READ-ONLY by design. Answers questions about the agent's own state and
  * reasoning, grounded in real log/decision data. No LLM, no guessing,
@@ -150,6 +150,26 @@ function buildExplanation(question, status, recentLog, pnlSummary) {
     const refused = relevant.filter((r) => r.state === 'FAULT').length;
     const scope = mentionedPair ? `on ${mentionedPair}` : 'across all pairs';
     return `Out of my last ${relevant.length} cycles ${scope}, I acted on ${traded} and refused to trade on ${refused} due to low conviction.`;
+  }
+
+  // Risk / breaker state
+  if (q.includes('risk') || q.includes('breaker') || q.includes('drawdown') || q.includes('paused')) {
+    const r = status.risk;
+    if (!r) return "Risk data isn't available yet — check back after the next cycle.";
+    if (r.tradingPaused) {
+      return `Trading is currently PAUSED — drawdown hit ${(r.drawdownPct * 100).toFixed(1)}%, at or past the ${(r.drawdownLimitPct * 100).toFixed(1)}% breaker limit. Existing positions still close normally; no new positions open until a human reviews and calls POST /resume.`;
+    }
+    return `Risk state: ${(r.drawdownPct * 100).toFixed(1)}% below peak balance (breaker at ${(r.drawdownLimitPct * 100).toFixed(1)}%), ${r.openPositionCount ?? '?'}/${r.maxOpenPositions} positions open, ${(r.maxPositionPct * 100).toFixed(0)}% max size per trade. Not paused.`;
+  }
+
+  // Did news change a decision
+  if (q.includes('news')) {
+    const affected = (recentLog || []).filter((r) => /News layer|event-risk veto/i.test(r.reason || '')).slice(-5);
+    if (affected.length === 0) {
+      return "No decisions in recent cycles were changed by the news layer — either no notable headlines came through, or they didn't move conviction enough to matter.";
+    }
+    const lines = affected.map((r) => `${r.pair} (${r.state}, ${r.convictionScore}/100)`);
+    return `The news layer changed ${affected.length} recent decision${affected.length > 1 ? 's' : ''}: ${lines.join(', ')}. Ask "why didn't you trade [coin]" for the full reasoning on any of these.`;
   }
 
   // Strategy — now includes the sentiment fix

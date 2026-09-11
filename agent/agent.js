@@ -1,16 +1,14 @@
 /**
- * CONTINUITY — Autonomous Diagnostic Trading Agent
- * Bitget AI Base Camp Hackathon S1 — Trading Agent Track
+ * DIAGNOS — Autonomous Diagnostic Trading Agent
  *
- * Thesis: most trading bots act constantly to look "active." Continuity
- * instead diagnoses the market every cycle — checking whether trend,
- * volatility, and sentiment agree — and only commits paper-trading size
- * in proportion to how strongly they agree.
+ * Every cycle, diagnoses per-pair trend/volatility/sentiment agreement,
+ * folds in an LLM read of news/event risk, and paper-trades in proportion
+ * to conviction. Refuses to trade when signals don't agree rather than
+ * forcing a guess.
  *
- * Three states per pair, every cycle:
- *   DIAGNOSED     -> signals strongly agree   -> full-size paper trade
- *   INCONCLUSIVE  -> signals partially agree  -> reduced-size paper trade
- *   FAULT         -> signals contradict/noisy -> refuses to trade
+ * Risk controls: 5% per-trade cap, max concurrent positions, account-level
+ * drawdown breaker with manual resume (see newsSignal.js and the risk
+ * section below).
  *
  * Paper trading only. Reads real public market data from Bitget.
  */
@@ -18,6 +16,13 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+
+let newsModule = null;
+try {
+  newsModule = require('./newsSignal');
+} catch (_) {
+  console.warn('newsSignal.js not found — running on rule-based signals only.');
+}
 
 // ---------- Configuration ----------
 
@@ -31,7 +36,9 @@ const CONFIG = {
   PORT: process.env.PORT || 3000,
   FAULT_THRESHOLD: 30,
   DIAGNOSED_THRESHOLD: 70,
-  MAX_POSITION_PCT: 0.25, // max share of balance sized into one full-conviction trade
+  MAX_POSITION_PCT: 0.05, // hard 5% cap of paper capital per position
+  MAX_OPEN_POSITIONS: parseInt(process.env.MAX_OPEN_POSITIONS || '5', 10),
+  MAX_DRAWDOWN_PCT: parseFloat(process.env.DRAWDOWN_PCT || '0.175'), // 17.5% default, inside locked 15-20% range
   PAIR_STAGGER_MS: 2000,
   // GitHub backup so trade history and open positions survive a container
   // restart. Optional — if unset, the agent runs the same, just without backup.
@@ -108,15 +115,15 @@ async function pushFileToGitHub(localPath, repoPath, commitMessage) {
 async function syncToGitHub() {
   if (!CONFIG.GITHUB_TOKEN || !CONFIG.GITHUB_REPO) return;
   const ts = new Date().toISOString();
-  await pushFileToGitHub(CONFIG.LOG_FILE, 'agent/data/trades_log.csv', `Continuity log sync — ${ts}`);
+  await pushFileToGitHub(CONFIG.LOG_FILE, 'agent/data/trades_log.csv', `Diagnos log sync — ${ts}`);
   if (fs.existsSync(CONFIG.PNL_LOG_FILE)) {
-    await pushFileToGitHub(CONFIG.PNL_LOG_FILE, 'agent/data/closed_trades.csv', `Continuity P&L sync — ${ts}`);
+    await pushFileToGitHub(CONFIG.PNL_LOG_FILE, 'agent/data/closed_trades.csv', `Diagnos P&L sync — ${ts}`);
   }
   if (fs.existsSync(CONFIG.STATE_FILE)) {
     // Backing up state.json (not just the CSVs) is what lets an open
     // position survive a container restart instead of silently resetting
     // its hold-window clock.
-    await pushFileToGitHub(CONFIG.STATE_FILE, 'agent/data/state.json', `Continuity state sync — ${ts}`);
+    await pushFileToGitHub(CONFIG.STATE_FILE, 'agent/data/state.json', `Diagnos state sync — ${ts}`);
   }
 }
 
@@ -145,6 +152,12 @@ function loadState() {
         if (!loaded.pairs[p]) loaded.pairs[p] = { priceHistory: [], lastDecision: null, openPosition: null };
         if (loaded.pairs[p].openPosition === undefined) loaded.pairs[p].openPosition = null;
       });
+      // drawdown breaker fields.
+      if (typeof loaded.balance !== 'number') loaded.balance = CONFIG.STARTING_BALANCE;
+      if (typeof loaded.peakBalance !== 'number') loaded.peakBalance = loaded.balance;
+      if (typeof loaded.tradingPaused !== 'boolean') loaded.tradingPaused = false;
+      if (!Array.isArray(loaded.drawdownTrips)) loaded.drawdownTrips = [];
+      if (typeof loaded.cyclesRun !== 'number') loaded.cyclesRun = 0;
       return loaded;
     } catch (e) {
       console.error('State file corrupted, reinitializing.', e.message);
@@ -152,7 +165,7 @@ function loadState() {
   }
   const pairs = {};
   CONFIG.PAIRS.forEach((p) => { pairs[p] = { priceHistory: [], lastDecision: null, openPosition: null }; });
-  return { balance: CONFIG.STARTING_BALANCE, pairs, cyclesRun: 0 };
+  return { balance: CONFIG.STARTING_BALANCE, peakBalance: CONFIG.STARTING_BALANCE, tradingPaused: false, drawdownTrips: [], pairs, cyclesRun: 0 };
 }
 
 function saveState(state) {
@@ -162,7 +175,62 @@ function saveState(state) {
 // Replaced with the real loaded state inside startAgent(), after an
 // attempted GitHub restore. Exists only so later functions can reference
 // `state` by name before startAgent() runs.
-let state = { balance: CONFIG.STARTING_BALANCE, pairs: {}, cyclesRun: 0 };
+let state = { balance: CONFIG.STARTING_BALANCE, peakBalance: CONFIG.STARTING_BALANCE, tradingPaused: false, drawdownTrips: [], pairs: {}, cyclesRun: 0 };
+
+// ---------- Risk-control layer ----------
+
+function countOpenPositions() {
+  return CONFIG.PAIRS.filter((p) => state.pairs[p] && state.pairs[p].openPosition).length;
+}
+
+function currentDrawdownPct() {
+  if (!state.peakBalance || state.peakBalance <= 0) return 0;
+  return Math.max(0, (state.peakBalance - state.balance) / state.peakBalance);
+}
+
+function updatePeakAndCheckBreaker(reason) {
+  // Ratchet peak up, never down except on manual resume.
+  if (state.balance > state.peakBalance) state.peakBalance = state.balance;
+  const dd = currentDrawdownPct();
+  if (!state.tradingPaused && dd >= CONFIG.MAX_DRAWDOWN_PCT) {
+    state.tradingPaused = true;
+    const trip = { timestamp: new Date().toISOString(), drawdownPct: dd, peak: state.peakBalance, balance: state.balance, reason: reason || 'drawdown limit breached' };
+    state.drawdownTrips.push(trip);
+    console.warn(`DRAWNDOWN BREAKER TRIPPED: ${(dd * 100).toFixed(2)}% below peak. Trading paused until manual POST /resume.`);
+  }
+  return dd;
+}
+
+// Human-readable search term per pair — free-text search returns better
+// results against a coin name than a raw ticker for most sources.
+const NEWS_SEARCH_TERM = {
+  BTCUSDT: 'Bitcoin', ETHUSDT: 'Ethereum', SOLUSDT: 'Solana', BNBUSDT: 'BNB',
+  XRPUSDT: 'XRP', DOGEUSDT: 'Dogecoin', ADAUSDT: 'Cardano', AVAXUSDT: 'Avalanche',
+  LINKUSDT: 'Chainlink',
+};
+const HEADLINES_TIMEOUT_MS = 8000;
+const HEADLINES_BASE_URL = 'https://cryptocurrency.cv/api/search';
+
+async function fetchHeadlinesForPair(pair) {
+  const term = NEWS_SEARCH_TERM[pair] || pair.replace('USDT', '');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), HEADLINES_TIMEOUT_MS);
+  try {
+    const url = `${HEADLINES_BASE_URL}?q=${encodeURIComponent(term)}&limit=8`;
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`headlines fetch failed: ${res.status}`);
+    const json = await res.json();
+    const articles = Array.isArray(json.articles) ? json.articles : [];
+    return articles.slice(0, 8).map((a) => a.title).filter(Boolean);
+  } catch (e) {
+    // No key required for this source, so a failure here is a real outage
+    // or timeout, not an auth issue — safe to fall through to neutral.
+    console.warn(`Headlines unavailable for ${pair}, news layer will read neutral:`, e.message);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ---------- Bitget public market data ----------
 
@@ -339,22 +407,29 @@ function executeCycle(pair, diagnostic, currentPrice) {
   // never actually happened, inflating "fee drag" far beyond real cost.
   const alreadyOpen = !!state.pairs[pair].openPosition;
   if (diagnostic.state !== 'FAULT' && !alreadyOpen) {
-    const { usdSize, qty: sizedQty } = sizePosition(diagnostic.convictionScore, state.balance, currentPrice);
-    direction = diagnostic.direction;
-    qty = sizedQty;
+    if (state.tradingPaused) {
+      diagnostic = { ...diagnostic, state: 'FAULT', reason: `${diagnostic.reason} Blocked: drawdown breaker paused trading until manual POST /resume.` };
+    } else if (countOpenPositions() >= CONFIG.MAX_OPEN_POSITIONS) {
+      diagnostic = { ...diagnostic, state: 'FAULT', reason: `${diagnostic.reason} Blocked: max ${CONFIG.MAX_OPEN_POSITIONS} concurrent positions reached.` };
+    } else {
+      const { usdSize, qty: sizedQty } = sizePosition(diagnostic.convictionScore, state.balance, currentPrice);
+      direction = diagnostic.direction;
+      qty = sizedQty;
 
-    const feeRate = 0.0006; // typical taker fee
-    balanceChange = -(usdSize * feeRate);
-    state.balance += balanceChange;
+      const feeRate = 0.0006; // typical taker fee
+      balanceChange = -(usdSize * feeRate);
+      state.balance += balanceChange;
+      updatePeakAndCheckBreaker(`fee on ${pair} open`);
 
-    state.pairs[pair].openPosition = {
-      openedAt: timestamp,
-      pair,
-      direction,
-      convictionScore: diagnostic.convictionScore,
-      entryPrice: currentPrice,
-      quantity: qty,
-    };
+      state.pairs[pair].openPosition = {
+        openedAt: timestamp,
+        pair,
+        direction,
+        convictionScore: diagnostic.convictionScore,
+        entryPrice: currentPrice,
+        quantity: qty,
+      };
+    }
   } else if (diagnostic.state !== 'FAULT' && alreadyOpen) {
     // Signal still non-FAULT, but a position is already open for this pair —
     // log the read for visibility without opening a second position or fee.
@@ -435,6 +510,7 @@ function closePosition(pair, pairState, pos, exitPrice, closeReason) {
   const realizedPnl = calculateRealizedPnl(pos, exitPrice);
   const closedAt = new Date().toISOString();
   state.balance += realizedPnl;
+  updatePeakAndCheckBreaker(`close ${pair} (${closeReason}) pnl ${realizedPnl.toFixed(2)}`);
 
   const row = [
     pos.openedAt, closedAt, pair, pos.direction, pos.convictionScore,
@@ -476,7 +552,20 @@ async function runOnePair(pair) {
     }
 
     const longShortRatio = await fetchLongShortRatio(pair);
-    const diagnostic = runDiagnostic(closes, fundingRate, longShortRatio);
+    let diagnostic = runDiagnostic(closes, fundingRate, longShortRatio);
+    // LLM news layer: Qwen primary, Groq fallback. Never crashes cycle.
+    if (newsModule) {
+      try {
+        const headlines = await fetchHeadlinesForPair(pair);
+        const news = await newsModule.newsSignal(pair, headlines);
+        diagnostic = newsModule.mergeNewsIntoDiagnostic(diagnostic, news, {
+          fault: CONFIG.FAULT_THRESHOLD,
+          diagnosed: CONFIG.DIAGNOSED_THRESHOLD,
+        });
+      } catch (e) {
+        console.warn(`News layer skipped for ${pair}:`, e.message);
+      }
+    }
     executeCycle(pair, diagnostic, currentPrice);
   } catch (err) {
     console.error(`Cycle failed for ${pair}:`, err.message);
@@ -538,16 +627,16 @@ function readClosedTrades(n = 100, pairFilter = null) {
 
 function buildStatusPayload() {
   const pairs = {};
-  CONFIG.PAIRS.forEach((p) => { pairs[p] = state.pairs[p].lastDecision; });
+  CONFIG.PAIRS.forEach((p) => { pairs[p] = state.pairs[p] ? state.pairs[p].lastDecision : null; });
 
   let mostRecent = null;
   CONFIG.PAIRS.forEach((p) => {
-    const d = state.pairs[p].lastDecision;
+    const d = state.pairs[p] && state.pairs[p].lastDecision;
     if (d && (!mostRecent || new Date(d.timestamp) > new Date(mostRecent.timestamp))) mostRecent = d;
   });
 
   const openPositions = {};
-  CONFIG.PAIRS.forEach((p) => { openPositions[p] = state.pairs[p].openPosition || null; });
+  CONFIG.PAIRS.forEach((p) => { openPositions[p] = (state.pairs[p] && state.pairs[p].openPosition) || null; });
 
   return {
     pairs: CONFIG.PAIRS,
@@ -556,15 +645,38 @@ function buildStatusPayload() {
     cyclesRun: state.cyclesRun,
     lastDecisionByPair: pairs,
     lastDecision: mostRecent,
-    openPositionCount: CONFIG.PAIRS.filter((p) => state.pairs[p].openPosition).length,
+    openPositionCount: countOpenPositions(),
     openPositions,
+    risk: {
+      peakBalance: state.peakBalance,
+      drawdownPct: currentDrawdownPct(),
+      drawdownLimitPct: CONFIG.MAX_DRAWDOWN_PCT,
+      tradingPaused: !!state.tradingPaused,
+      maxPositionPct: CONFIG.MAX_POSITION_PCT,
+      maxOpenPositions: CONFIG.MAX_OPEN_POSITIONS,
+      trips: state.drawdownTrips || [],
+    },
+  };
+}
+
+function buildRiskPayload() {
+  return {
+    balance: state.balance,
+    peakBalance: state.peakBalance,
+    drawdownPct: currentDrawdownPct(),
+    drawdownLimitPct: CONFIG.MAX_DRAWDOWN_PCT,
+    tradingPaused: !!state.tradingPaused,
+    maxPositionPct: CONFIG.MAX_POSITION_PCT,
+    maxOpenPositions: CONFIG.MAX_OPEN_POSITIONS,
+    openPositionCount: countOpenPositions(),
+    trips: state.drawdownTrips || [],
   };
 }
 
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
@@ -661,6 +773,23 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === '/risk') {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders() });
+    return res.end(JSON.stringify(buildRiskPayload()));
+  }
+
+  if (url.pathname === '/resume' && req.method === 'POST') {
+    // Manual reset for the drawdown breaker. Requires human review by design.
+    state.tradingPaused = false;
+    state.peakBalance = state.balance;
+    const entry = { timestamp: new Date().toISOString(), balance: state.balance, note: 'manual resume after review' };
+    state.drawdownTrips.push(entry);
+    saveState(state);
+    console.log(`[${entry.timestamp}] Drawdown breaker manually resumed at balance ${state.balance.toFixed(2)}.`);
+    res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders() });
+    return res.end(JSON.stringify({ resumed: true, ...buildRiskPayload() }));
+  }
+
   res.writeHead(404, corsHeaders());
   res.end('Not found. Try /status or /log');
 });
@@ -668,8 +797,9 @@ const server = http.createServer((req, res) => {
 // ---------- Startup ----------
 
 async function startAgent() {
-  console.log('Continuity agent starting.');
+  console.log('Diagnos agent starting.');
   console.log(`Pairs: ${CONFIG.PAIRS.join(', ')} | Interval: ${CONFIG.CHECK_INTERVAL_MS / 60000} min | Starting balance: $${CONFIG.STARTING_BALANCE}`);
+  console.log(`Risk: maxPosition ${(CONFIG.MAX_POSITION_PCT * 100).toFixed(1)}% | maxOpen ${CONFIG.MAX_OPEN_POSITIONS} | drawdown ${(CONFIG.MAX_DRAWDOWN_PCT * 100).toFixed(1)}% | LLM ${newsModule ? 'newsSignal loaded (qwen->groq)' : 'disabled'}`);
 
   if (CONFIG.GITHUB_TOKEN && CONFIG.GITHUB_REPO) {
     console.log(`GitHub backup sync enabled -> ${CONFIG.GITHUB_REPO} (every ${CONFIG.GITHUB_SYNC_INTERVAL_MS / 60000} min)`);
@@ -683,7 +813,7 @@ async function startAgent() {
   state = loadState();
 
   server.listen(CONFIG.PORT, () => {
-    console.log(`Continuity status API listening on port ${CONFIG.PORT}`);
+    console.log(`Diagnos status API listening on port ${CONFIG.PORT}`);
   });
 
   // Check any open positions immediately on startup, before the slower
