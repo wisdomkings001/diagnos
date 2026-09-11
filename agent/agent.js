@@ -576,8 +576,16 @@ async function runOnePair(pair) {
 
     const longShortRatio = await fetchLongShortRatio(pair);
     let diagnostic = runDiagnostic(closes, fundingRate, longShortRatio);
+    const alreadyOpen = !!pairState.openPosition;
     // LLM news layer: Qwen primary, Groq fallback. Never crashes cycle.
-    if (newsModule) {
+    // Skipped when a position is already open — executeCycle() discards
+    // the fresh diagnostic for an already-open pair except for a
+    // visibility log row, so the news call can't change anything for it.
+    // The open position's fate for the rest of its 1-hour hold is
+    // decided by the hold-timer/stop-loss, not by re-diagnosing every
+    // 15 minutes. This only skips the LLM call, not the rule-based
+    // read, so the log/pulse chart still shows a state each cycle.
+    if (newsModule && !alreadyOpen) {
       try {
         const headlines = await fetchHeadlinesForPair(pair);
         const news = await newsModule.newsSignal(pair, headlines);
