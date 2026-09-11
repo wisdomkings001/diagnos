@@ -27,7 +27,7 @@ try {
 // ---------- Configuration ----------
 
 const CONFIG = {
-  PAIRS: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT'],
+  PAIRS: ['TSLAUSDT', 'NVDAUSDT', 'AAPLUSDT', 'MSTRUSDT', 'METAUSDT', 'COINUSDT', 'QQQUSDT', 'GOOGLUSDT', 'AMZNUSDT'],
   PRODUCT_TYPE: 'usdt-futures',
   CHECK_INTERVAL_MS: 15 * 60 * 1000,
   STARTING_BALANCE: 10000, // shared paper balance across all pairs
@@ -204,9 +204,9 @@ function updatePeakAndCheckBreaker(reason) {
 // Human-readable search term per pair — free-text search returns better
 // results against a coin name than a raw ticker for most sources.
 const NEWS_SEARCH_TERM = {
-  BTCUSDT: 'Bitcoin', ETHUSDT: 'Ethereum', SOLUSDT: 'Solana', BNBUSDT: 'BNB',
-  XRPUSDT: 'XRP', DOGEUSDT: 'Dogecoin', ADAUSDT: 'Cardano', AVAXUSDT: 'Avalanche',
-  LINKUSDT: 'Chainlink',
+  TSLAUSDT: 'Tesla', NVDAUSDT: 'NVIDIA', AAPLUSDT: 'Apple', MSTRUSDT: 'MicroStrategy',
+  METAUSDT: 'Meta', COINUSDT: 'Coinbase', QQQUSDT: 'Nasdaq 100', GOOGLUSDT: 'Google',
+  AMZNUSDT: 'Amazon',
 };
 const HEADLINES_TIMEOUT_MS = 8000;
 const HEADLINES_BASE_URL = 'https://cryptocurrency.cv/api/search';
@@ -526,6 +526,29 @@ function closePosition(pair, pairState, pos, exitPrice, closeReason) {
 
 // ---------- Main loop ----------
 
+// Runs once at startup. If CONFIG.PAIRS changes (e.g. swapping the traded
+// universe), any position still open on a pair no longer being tracked
+// would otherwise sit forever — never re-checked, never closed, silently
+// locking that capital and skewing balance/P&L. This closes those out
+// cleanly at current price before the new pair list starts running.
+async function closeStalePositions() {
+  const trackedNow = new Set(CONFIG.PAIRS);
+  const stalePairs = Object.keys(state.pairs).filter(
+    (p) => !trackedNow.has(p) && state.pairs[p] && state.pairs[p].openPosition
+  );
+  if (stalePairs.length === 0) return;
+  console.log(`Startup: ${stalePairs.length} open position(s) on pairs no longer tracked — closing at current price.`);
+  for (const pair of stalePairs) {
+    try {
+      const ticker = await fetchTicker(pair);
+      const currentPrice = parseFloat(ticker.lastPr || ticker.last);
+      closePosition(pair, state.pairs[pair], state.pairs[pair].openPosition, currentPrice, 'pair-migration');
+    } catch (err) {
+      console.warn(`Could not close stale position on ${pair} (${err.message}) — left open, check manually.`);
+    }
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -819,6 +842,8 @@ async function startAgent() {
   }
 
   state = loadState();
+
+  await closeStalePositions();
 
   server.listen(CONFIG.PORT, () => {
     console.log(`Diagnos status API listening on port ${CONFIG.PORT}`);
