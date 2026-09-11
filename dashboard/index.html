@@ -4,73 +4,105 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Diagnos — Event-Driven Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#070B16; --bg2:#0B1124; --panel:#0E1530; --raised:#141D3D;
-  --line:#1E2A55; --line2:#2B3A72;
-  --text:#EDEFFC; --dim:#9AA5CE; --faint:#5B6694;
-  --dx:#3EE6C4; --dx-dim:#123F3A;
-  --inc:#FFB454; --inc-dim:#4A3413;
-  --flt:#FF6B7A; --flt-dim:#4E1F28;
-  --acc:#7C8CFF;
-  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --bg:#161A20; --bg2:#12161B; --panel:#1B2129; --raised:#232B34;
+  --line:#2B333D; --line2:#3C4753;
+  --text:#CAD3DB; --dim:#8C99A5; --faint:#525C66;
+  --dx:#6FA87A; --dx-dim:#1E2B22;
+  --inc:#D4A24C; --inc-dim:#332711;
+  --flt:#C1503D; --flt-dim:#341B16;
+  --acc:#8FADBA;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --r:3px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{color-scheme:dark}
-body{background:radial-gradient(900px 400px at 20% -5%,#1A2560 0%,transparent 60%),radial-gradient(800px 380px at 90% 0%,#0E3A44 0%,transparent 55%),var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;line-height:1.5}
+body{
+  background:
+    repeating-linear-gradient(0deg,rgba(143,173,186,.035) 0,rgba(143,173,186,.035) 1px,transparent 1px,transparent 28px),
+    repeating-linear-gradient(90deg,rgba(143,173,186,.035) 0,rgba(143,173,186,.035) 1px,transparent 1px,transparent 28px),
+    var(--bg);
+  color:var(--text);font-family:var(--sans);min-height:100vh;line-height:1.5;
+}
 .app{max-width:1120px;margin:0 auto;padding:0 20px 80px}
-.topbar{position:sticky;top:0;z-index:10;background:rgba(7,11,22,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin:0 -20px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.topbar{position:sticky;top:0;z-index:10;background:rgba(18,22,27,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line2);margin:0 -20px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px}
-.pulse{width:11px;height:11px;border-radius:50%;background:var(--dx);box-shadow:0 0 12px var(--dx);flex-shrink:0}
-.pulse.warn{background:var(--inc);box-shadow:0 0 12px var(--inc)}
-.pulse.stop{background:var(--flt);box-shadow:0 0 12px var(--flt)}
-.brand h1{font-family:var(--mono);font-size:17px;letter-spacing:.04em}
-.badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;background:var(--raised);border:1px solid var(--line2);color:var(--acc);padding:3px 8px;border-radius:20px;text-transform:uppercase}
+.pulse{width:8px;height:8px;background:var(--dx);transform:rotate(45deg);box-shadow:0 0 0 3px var(--dx-dim);flex-shrink:0}
+.pulse.warn{background:var(--inc);box-shadow:0 0 0 3px var(--inc-dim)}
+.pulse.stop{background:var(--flt);box-shadow:0 0 0 3px var(--flt-dim)}
+.brand h1{font-family:var(--mono);font-size:17px;letter-spacing:.06em;font-weight:600}
+.badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;background:var(--raised);border:1px solid var(--line2);color:var(--acc);padding:3px 8px;border-radius:var(--r);text-transform:uppercase}
 .brand p{font-size:12px;color:var(--dim)}
-.risk-pill{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.05em;padding:7px 12px;border-radius:20px;border:1px solid var(--line2)}
+.risk-pill{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.05em;padding:7px 12px;border-radius:var(--r);border:1px solid var(--line2)}
 .risk-pill.live{color:var(--dx);border-color:var(--dx)}
 .risk-pill.paused{color:var(--flt);border-color:var(--flt)}
 main{padding-top:22px}
-.conn{display:none;background:#2A1420;border:1px solid var(--flt);color:#FFB9C1;font-family:var(--mono);font-size:12.5px;padding:12px 14px;border-radius:10px;margin-bottom:18px}
+.conn{display:none;background:var(--flt-dim);border:1px solid var(--flt);color:#E8AFA6;font-family:var(--mono);font-size:12.5px;padding:12px 14px;border-radius:var(--r);margin-bottom:18px}
 .conn.show{display:block}
 .conn .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.conn input{flex:1;min-width:220px;background:var(--bg2);border:1px solid var(--line2);color:var(--text);font-family:var(--mono);font-size:12px;padding:9px 10px;border-radius:8px}
-.conn button{background:var(--acc);border:none;color:#0A0E20;font-family:var(--mono);font-size:12px;font-weight:700;padding:9px 14px;border-radius:8px;cursor:pointer}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
-@media(max-width:760px){.cards{grid-template-columns:repeat(2,1fr)}}
-.card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:12px;padding:15px 16px}
-.card .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
-.card .v{font-family:var(--mono);font-size:23px;font-weight:700}
+.conn input{flex:1;min-width:220px;background:var(--bg2);border:1px solid var(--line2);color:var(--text);font-family:var(--mono);font-size:12px;padding:9px 10px;border-radius:var(--r)}
+.conn button{background:var(--acc);border:none;color:#0F1418;font-family:var(--mono);font-size:12px;font-weight:700;padding:9px 14px;border-radius:var(--r);cursor:pointer}
+
+/* Overview stats — one merged instrument strip, not separate boxes */
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:0;border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+.card{background:var(--panel);padding:14px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.card:nth-child(2n){border-right:none}
+.card:nth-child(n+3){border-bottom:none}
+.card .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.card .v{font-family:var(--mono);font-size:21px;font-weight:600}
 .card .s{font-size:11.5px;color:var(--dim);margin-top:4px;font-family:var(--mono)}
 .v.up{color:var(--dx)} .v.down{color:var(--flt)}
-.risk{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:14px}
-@media(max-width:760px){.risk{grid-template-columns:repeat(2,1fr)}}
-.risk .rk .k{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:5px}
-.risk .rk .n{font-family:var(--mono);font-size:15px;font-weight:700}
-.risk .rk .d{font-size:11px;color:var(--dim)}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
-.ptitle{padding:14px 18px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);display:flex;justify-content:space-between;align-items:center}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line)}
-@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:480px){.grid{grid-template-columns:1fr}}
-.coin{background:var(--panel);padding:15px 16px;cursor:pointer;border-left:3px solid transparent}
+
+/* Risk strip — same merged treatment, single column stack on mobile */
+.risk{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;display:grid;grid-template-columns:1fr;overflow:hidden}
+@media(min-width:600px){.risk{grid-template-columns:repeat(4,1fr)}}
+.risk .rk{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+@media(min-width:600px){.risk .rk{border-bottom:none;border-right:1px solid var(--line);flex-direction:column;align-items:flex-start;gap:4px}.risk .rk:last-child{border-right:none}}
+.risk .rk:last-child{border-bottom:none}
+.risk .rk .k{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.risk .rk .n{font-family:var(--mono);font-size:15px;font-weight:600}
+.risk .rk .d{font-size:11px;color:var(--dim);text-align:right}
+@media(min-width:600px){.risk .rk .d{text-align:left}}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:18px}
+.ptitle{padding:14px 18px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ptitle span:first-child{display:flex;align-items:center;gap:8px}
+.ptitle span:first-child:before{content:'';width:6px;height:6px;background:var(--acc);transform:rotate(45deg);flex-shrink:0}
+.sec{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.sec:before{content:'';width:6px;height:6px;background:var(--acc);transform:rotate(45deg);flex-shrink:0}
+
+/* Pairs — a connected vertical rail instead of a card grid */
+.grid{display:flex;flex-direction:column;position:relative;padding-left:20px}
+.grid:before{content:'';position:absolute;left:9px;top:0;bottom:0;width:1px;background:var(--line2)}
+.coin{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:pointer;margin:0 0 8px;clip-path:polygon(14px 0,100% 0,100% 100%,0 100%,0 14px)}
+.coin:last-child{margin-bottom:0}
+.coin:before{content:'';position:absolute;left:-20px;top:50%;width:20px;height:1px;background:var(--line2)}
+.coin:after{content:'';position:absolute;left:-24px;top:50%;width:7px;height:7px;margin-top:-3.5px;background:var(--faint);transform:rotate(45deg)}
+.coin.dx:after{background:var(--dx);box-shadow:0 0 5px var(--dx)}
+.coin.inc:after{background:var(--inc);box-shadow:0 0 5px var(--inc)}
+.coin.flt:after{background:var(--flt)}
 .coin:hover{background:var(--raised)}
-.coin.dx{border-left-color:var(--dx)} .coin.inc{border-left-color:var(--inc)} .coin.flt{border-left-color:var(--flt)}
 .coin .t{display:flex;justify-content:space-between;margin-bottom:8px;font-family:var(--mono)}
-.coin .sym{font-weight:700;font-size:14px}
+.coin .sym{font-weight:600;font-size:14px;letter-spacing:.03em}
 .coin .cf{font-size:12px;color:var(--dim)}
-.coin .dr{font-size:12px;margin-bottom:9px;color:var(--dim)}
+.coin .dr{font-size:11.5px;margin-bottom:9px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
 .coin .dr.long{color:var(--dx)} .coin .dr.short{color:var(--flt)}
-.bar{height:5px;background:var(--line);border-radius:4px;overflow:hidden}
-.bar i{display:block;height:100%;border-radius:4px}
-.news{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.04em;border:1px solid var(--line2);color:var(--acc);padding:2px 7px;border-radius:20px;margin-top:8px}
+.bar{height:6px;background:var(--bg2);border:1px solid var(--line);overflow:hidden;display:flex;gap:2px;padding:1px}
+.bar i{display:block;height:100%;background-image:repeating-linear-gradient(90deg,currentColor 0,currentColor 3px,transparent 3px,transparent 5px);opacity:.9}
+.news{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.04em;border:1px solid var(--acc);color:var(--acc);padding:2px 7px;border-radius:var(--r);margin-top:8px}
+
 .log{max-height:420px;overflow-y:auto}
-.lrow{display:grid;grid-template-columns:78px 96px 1fr 56px;gap:10px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--line);font-size:12.5px;cursor:pointer}
+.lrow{position:relative;display:grid;grid-template-columns:78px 96px 1fr 56px;gap:10px;align-items:center;padding:11px 18px 11px 22px;border-bottom:1px solid var(--line);font-size:12.5px;cursor:pointer}
+.lrow:before{content:'';position:absolute;left:10px;top:8px;bottom:8px;width:1px;background:var(--line2)}
 .lrow:last-child{border-bottom:none}
 .lrow .tm{font-family:var(--mono);font-size:11px;color:var(--faint)}
-.tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em;padding:3px 7px;border-radius:6px;width:fit-content}
-.tag.dx{background:var(--dx-dim);color:var(--dx)} .tag.inc{background:var(--inc-dim);color:var(--inc)} .tag.flt{background:var(--flt-dim);color:var(--flt)}
+.tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.03em;padding:3px 7px;border-radius:var(--r);width:fit-content;border:1px solid transparent}
+.tag.dx{background:var(--dx-dim);color:var(--dx);border-color:var(--dx)} .tag.inc{background:var(--inc-dim);color:var(--inc);border-color:var(--inc)} .tag.flt{background:var(--flt-dim);color:var(--flt);border-color:var(--flt)}
 .lrow .rs{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrow.open .rs{white-space:normal;overflow:visible}
 .askbox{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
@@ -79,45 +111,47 @@ main{padding-top:22px}
 .m.u{font-family:var(--mono);font-size:12px;color:var(--dim)} .m.u:before{content:'> ';color:var(--faint)}
 .m.a{border-left:2px solid var(--acc);padding-left:10px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--raised);border:1px solid var(--line2);padding:5px 10px;border-radius:20px;cursor:pointer}
+.chip{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--raised);border:1px solid var(--line2);padding:5px 10px;border-radius:var(--r);cursor:pointer}
 .inrow{display:flex;border-top:1px solid var(--line)}
-.inrow input{flex:1;background:transparent;border:none;color:var(--text);font-size:13.5px;padding:14px 18px;outline:none}
+.inrow input{flex:1;background:transparent;border:none;color:var(--text);font-size:13.5px;padding:14px 18px;outline:none;font-family:var(--sans)}
 .inrow button{background:none;border:none;border-left:1px solid var(--line);color:var(--acc);font-family:var(--mono);font-size:12px;font-weight:700;padding:0 20px;cursor:pointer;text-transform:uppercase}
 footer{margin-top:26px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--faint)}
 footer a{color:var(--dim)}
-.sec{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:0 0 10px}
 .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start;margin-bottom:18px}
 @media(max-width:880px){.grid2{grid-template-columns:1fr}}
-.op-row{display:flex;justify-content:space-between;padding:9px 18px;border-bottom:1px solid var(--line);font-size:12.5px}
-.op-row:last-of-type{border-bottom:none}
-.op-label{color:var(--faint);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-.op-value{font-family:var(--mono);font-weight:700}
+
+/* Open position — a 2-column instrument cluster, not a list of rows */
+#openBox{display:grid;grid-template-columns:repeat(2,1fr)}
+.op-row{display:flex;flex-direction:column;gap:4px;padding:12px 16px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:13px}
+.op-row:nth-child(2n){border-right:none}
+.op-label{color:var(--faint);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;order:1}
+.op-value{font-family:var(--mono);font-weight:600;font-size:15px;order:0}
 .op-pnl-positive{color:var(--dx)} .op-pnl-negative{color:var(--flt)}
-.op-progress-wrap{padding:14px 18px}
+.op-progress-wrap{grid-column:1/-1;padding:14px 16px;border-top:1px solid var(--line)}
 .op-progress-label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:8px}
-.op-progress-track{height:6px;background:var(--line);border-radius:4px;overflow:hidden}
-.op-progress-fill{display:block;height:100%;background:var(--acc);border-radius:4px;transition:width .3s}
+.op-progress-track{height:6px;background:var(--bg2);border:1px solid var(--line);overflow:hidden}
+.op-progress-fill{display:block;height:100%;background:var(--acc);transition:width .3s}
 .op-progress-fill.op-stop-warn{background:var(--flt)}
+
 .pulsewrap{padding:16px 18px 6px}
 .pulse-legend{display:flex;gap:14px;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-bottom:10px}
 .pulse-legend span{display:flex;align-items:center;gap:5px}
-.pulse-legend .sw{width:8px;height:8px;border-radius:50%}
+.pulse-legend .sw{width:6px;height:6px;transform:rotate(45deg)}
 .sw.dx{background:var(--dx)} .sw.inc{background:var(--inc)} .sw.flt{background:var(--flt)}
 #pulseSvg{width:100%;height:160px;display:block}
 .pulse-empty{font-family:var(--mono);font-size:12px;color:var(--faint);text-align:center;padding:50px 0}
-.bd{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line)}
-@media(max-width:760px){.bd{grid-template-columns:repeat(4,1fr)}}
-@media(max-width:480px){.bd{grid-template-columns:repeat(3,1fr)}}
+.bd{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line)}
+@media(min-width:600px){.bd{grid-template-columns:repeat(7,1fr)}}
 .bd .c{background:var(--panel);padding:12px 10px;text-align:center}
 .bd .c .k{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:5px}
-.bd .c .v{font-family:var(--mono);font-size:15px;font-weight:700}
+.bd .c .v{font-family:var(--mono);font-size:15px;font-weight:600}
 .newsrow{padding:12px 18px;border-bottom:1px solid var(--line);font-size:12.5px}
 .newsrow:last-child{border-bottom:none}
 .newsmeta{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .newslabel{color:var(--text);line-height:1.5}
 .newshead{font-family:var(--mono);font-size:11.5px;color:var(--dim);padding:5px 0 5px 14px;border-left:2px solid var(--line);margin-top:4px}
-.tag.veto{background:var(--flt-dim);color:var(--flt)}
-.tag.provider{background:var(--panel);color:var(--faint);border:1px solid var(--line)}
+.tag.veto{background:var(--flt-dim);color:var(--flt);border-color:var(--flt)}
+.tag.provider{background:var(--panel);color:var(--faint);border-color:var(--line)}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 </style>
 </head>
@@ -142,25 +176,16 @@ footer a{color:var(--dim)}
   <div class="card"><div class="k">Fault</div><div class="v" id="fltN" style="color:var(--flt)">0</div><div class="s">sitting out</div></div>
 </div>
 <div class="risk" id="riskBox">
-  <div class="rk"><div class="k">Drawdown breaker</div><div class="n" id="rkState">—</div><div class="d" id="rkSub">—</div></div>
-  <div class="rk"><div class="k">Drawdown</div><div class="n" id="rkDd">—</div><div class="d" id="rkLim">limit —</div></div>
-  <div class="rk"><div class="k">Open positions</div><div class="n" id="rkOpen">—</div><div class="d">max 5 / 5% per trade</div></div>
-  <div class="rk"><div class="k">News layer</div><div class="n" id="rkNews" style="color:var(--acc)">Qwen -&gt; Groq</div><div class="d">veto to FAULT / nudge +/-20</div></div>
+  <div class="rk"><div><div class="k">Drawdown breaker</div><div class="n" id="rkState">—</div></div><div class="d" id="rkSub">—</div></div>
+  <div class="rk"><div><div class="k">Drawdown</div><div class="n" id="rkDd">—</div></div><div class="d" id="rkLim">limit —</div></div>
+  <div class="rk"><div><div class="k">Open positions</div><div class="n" id="rkOpen">—</div></div><div class="d">max 5 / 5%</div></div>
+  <div class="rk"><div><div class="k">News layer</div><div class="n" id="rkNews" style="color:var(--acc)">Qwen -&gt; Groq</div></div><div class="d">veto/nudge</div></div>
 </div>
 <div class="sec">Pairs — tap any coin for detail</div>
-<div class="panel"><div class="grid" id="grid"></div></div>
+<div class="grid" id="grid"></div>
 </div>
 <div id="detail" style="display:none">
   <div class="sec"><span id="dTitle">Detail</span> &nbsp;·&nbsp; <a href="#" id="back" style="color:var(--acc);font-weight:700;font-size:13px;text-decoration:underline">&larr; Back to board</a></div>
-  <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox">—</div></div>
-  <div class="panel"><div class="ptitle"><span>News read</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">Qwen -&gt; Groq</span></div><div id="newsBox"></div></div>
-  <div class="panel"><div class="ptitle"><span>Conviction pulse</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">last 60 cycles</span></div>
-    <div class="pulsewrap">
-      <div class="pulse-legend"><span><i class="sw dx"></i>Diagnosed</span><span><i class="sw inc"></i>Inconclusive</span><span><i class="sw flt"></i>Fault</span></div>
-      <svg id="pulseSvg" viewBox="0 0 1000 160" preserveAspectRatio="none"></svg>
-      <div class="pulse-empty" id="pulseEmpty" style="display:none">No diagnostic cycles logged yet for this pair.</div>
-    </div>
-  </div>
   <div class="panel"><div class="ptitle"><span>Breakdown</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">this window</span></div>
     <div class="bd">
       <div class="c"><div class="k">Diagnosed</div><div class="v" id="bdDx" style="color:var(--dx)">0</div></div>
@@ -172,6 +197,15 @@ footer a{color:var(--dim)}
       <div class="c"><div class="k">Net impact</div><div class="v" id="bdNet">$0.00</div></div>
     </div>
   </div>
+  <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox">—</div></div>
+  <div class="panel"><div class="ptitle"><span>Conviction pulse</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">last 60 cycles</span></div>
+    <div class="pulsewrap">
+      <div class="pulse-legend"><span><i class="sw dx"></i>Diagnosed</span><span><i class="sw inc"></i>Inconclusive</span><span><i class="sw flt"></i>Fault</span></div>
+      <svg id="pulseSvg" viewBox="0 0 1000 160" preserveAspectRatio="none"></svg>
+      <div class="pulse-empty" id="pulseEmpty" style="display:none">No diagnostic cycles logged yet for this pair.</div>
+    </div>
+  </div>
+  <div class="panel"><div class="ptitle"><span>News read</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">Qwen -&gt; Groq</span></div><div id="newsBox"></div></div>
   <div class="grid2">
     <div class="panel"><div class="ptitle"><span>Diagnostic log</span><span id="logN"></span></div><div class="log" id="log"></div></div>
     <div class="panel"><div class="ptitle"><span>Closed trades</span><span id="pnlN"></span></div><div class="log" id="pnl"></div></div>
