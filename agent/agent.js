@@ -312,7 +312,7 @@ function volatilitySignal(closes) {
   return { value: stdDevPct, label: `${stdDevPct.toFixed(3)}% stdev` };
 }
 
-function sentimentSignal(fundingRate, longShortRatio) {
+function sentimentSignal(fundingRate, longShortRatio, newsValue) {
   // Crypto perpetuals sit moderately long-skewed most of the time as a
   // structural baseline (L/S ratio 1.4-2.0 is routine, not meaningful).
   // Only a genuinely extreme skew counts as a signal, and it's treated
@@ -335,6 +335,16 @@ function sentimentSignal(fundingRate, longShortRatio) {
     label += extremeLongSkew || extremeShortSkew ? '' : ' — extreme funding, treated as contrarian/crowded';
   }
 
+  // No crowd-positioning signal at all (confirmed empty for Stock Perps
+  // — Bitget's long/short endpoint has no data for this asset class) —
+  // fall back to the LLM news read as the sentiment proxy instead of
+  // silently staying neutral forever, which would cap every score below
+  // the FAULT threshold regardless of trend strength.
+  if (value === 0 && typeof newsValue === 'number' && newsValue !== 0) {
+    value = newsValue;
+    label = `no L/S data for this symbol — using news read as sentiment proxy (${newsValue > 0 ? '+' : ''}${newsValue})`;
+  }
+
   return { value: Math.max(-100, Math.min(100, value)), label };
 }
 
@@ -350,10 +360,10 @@ function pickDirection(trendValue, sentimentValue) {
     : (sentimentValue >= 0 ? 'long' : 'short');
 }
 
-function runDiagnostic(closes, fundingRate, longShortRatio) {
+function runDiagnostic(closes, fundingRate, longShortRatio, newsValue) {
   const trend = trendSignal(closes);
   const vol = volatilitySignal(closes);
-  const sentiment = sentimentSignal(fundingRate, longShortRatio);
+  const sentiment = sentimentSignal(fundingRate, longShortRatio, newsValue);
 
   const bothNonZero = trend.value !== 0 && sentiment.value !== 0;
   const sameSign = bothNonZero && Math.sign(trend.value) === Math.sign(sentiment.value);
@@ -575,29 +585,43 @@ async function runOnePair(pair) {
     }
 
     const longShortRatio = await fetchLongShortRatio(pair);
-    let diagnostic = runDiagnostic(closes, fundingRate, longShortRatio);
     const alreadyOpen = !!pairState.openPosition;
     // LLM news layer: Qwen primary, Groq fallback. Never crashes cycle.
+    // Fetched BEFORE runDiagnostic now — not after — so its bias can
+    // fill in for sentiment on symbols where Bitget has no long/short
+    // data at all (confirmed for Stock Perps: the endpoint returns
+    // "data fetched is empty"). Without this, sentiment.value stays
+    // permanently 0 for these pairs, the trend/sentiment agreement
+    // bonus can never fire, and every pair reads FAULT forever
+    // regardless of how strong the actual trend is.
     // Skipped when a position is already open — executeCycle() discards
     // the fresh diagnostic for an already-open pair except for a
     // visibility log row, so the news call can't change anything for it.
-    // The open position's fate for the rest of its 1-hour hold is
-    // decided by the hold-timer/stop-loss, not by re-diagnosing every
-    // 15 minutes. This only skips the LLM call, not the rule-based
-    // read, so the log/pulse chart still shows a state each cycle.
+    let news = null;
     if (newsModule && !alreadyOpen) {
       try {
         const headlines = await fetchHeadlinesForPair(pair);
-        const news = await newsModule.newsSignal(pair, headlines);
+        news = await newsModule.newsSignal(pair, headlines);
         news.headlines = headlines;
         news.checkedAt = new Date().toISOString();
-        diagnostic = newsModule.mergeNewsIntoDiagnostic(diagnostic, news, {
-          fault: CONFIG.FAULT_THRESHOLD,
-          diagnosed: CONFIG.DIAGNOSED_THRESHOLD,
-        });
       } catch (e) {
         console.warn(`News layer skipped for ${pair}:`, e.message);
       }
+    }
+    let diagnostic = runDiagnostic(closes, fundingRate, longShortRatio, news ? news.value : 0);
+    diagnostic.news = news;
+    // Veto is the one thing that still applies after scoring: hard
+    // event-risk (earnings, macro, a hack) overrides even a strong
+    // trend/sentiment agreement, regardless of whether news also fed
+    // the sentiment score above.
+    if (news && news.veto === true) {
+      diagnostic = {
+        ...diagnostic,
+        state: 'FAULT',
+        convictionScore: Math.min(diagnostic.convictionScore, 20),
+        reason: `${diagnostic.reason} LLM event-risk veto (${news.provider}): ${news.label}.`,
+        news,
+      };
     }
     executeCycle(pair, diagnostic, currentPrice);
   } catch (err) {

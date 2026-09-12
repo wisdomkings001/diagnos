@@ -189,7 +189,7 @@ async function buildExplanation(question, status, recentLog, pnlSummary) {
 
   // Did news change a decision
   if (q.includes('news')) {
-    const affected = (recentLog || []).filter((r) => /News layer|event-risk veto/i.test(r.reason || '')).slice(-5);
+    const affected = (recentLog || []).filter((r) => /News layer|event-risk veto|sentiment proxy/i.test(r.reason || '')).slice(-5);
     if (affected.length === 0) {
       return "No decisions in recent cycles were changed by the news layer — either no notable headlines came through, or they didn't move conviction enough to matter.";
     }
