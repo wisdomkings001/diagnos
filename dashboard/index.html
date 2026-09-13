@@ -345,7 +345,7 @@ function renderTop(s){
     var d=s.lastDecisionByPair?s.lastDecisionByPair[p]:null;
     var c=d?cls(d.state):'flt';var cv=d?d.convictionScore:0;
     var dir=d&&d.direction&&d.direction!=='none'?d.direction.toUpperCase():(d?d.state:'NO DATA');
-    return '<div class="coin '+c+'" data-p="'+p+'"><div class="t"><span class="sym">'+fp(p)+'</span><span class="cf">'+cv+'/100</span></div><div class="dr '+(d?d.direction:'')+'">'+dir+'</div><div class="bar"><i style="width:'+cv+'%;background:'+col(d?d.state:'FAULT')+'"></i></div>'+newsTag(d?d.reason:'')+'</div>';
+    return '<div class="coin '+c+'" data-p="'+p+'"><div class="t"><span class="sym">'+fp(p)+'</span><span class="cf">'+cv+'/100</span></div><div class="dr '+(d?d.direction:'')+'">'+dir+'</div><div class="bar"><i style="width:'+cv+'%;background:'+col(d?d.state:'FAULT')+';color:'+col(d?d.state:'FAULT')+'"></i></div>'+newsTag(d?d.reason:'')+'</div>';
   }).join('');
   Array.prototype.forEach.call(g.querySelectorAll('.coin'),function(el){el.onclick=function(){openD(el.getAttribute('data-p'))}});
 }
