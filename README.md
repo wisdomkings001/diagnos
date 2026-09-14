@@ -137,4 +137,4 @@ Every pair reading `FAULT` simultaneously for an extended stretch is **expected 
 
 ---
 
-Built by Wisdom — TechCraft & Coding By Wisdom.
+Built by — TechCraft & Coding By Wisdom.
