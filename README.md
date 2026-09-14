@@ -1,6 +1,6 @@
 # Diagnos
 
-An autonomous diagnostic trading agent built for Bitget AI Base Camp Hackathon — Agentic Trading track, Event-Driven Agent sub-theme.
+An autonomous diagnostic trading agent, Agentic Trading track, Event-Driven Agent sub-theme.
 
 Paper trading only. No real funds are used at any point.
 
