@@ -1,6 +1,6 @@
 # Diagnos
 
-An autonomous diagnostic trading agent built for Bitget AI Base Camp Hackathon — Agentic Trading track, Event-Driven Agent sub-theme.
+An autonomous diagnostic trading agent, Agentic Trading track, Event-Driven Agent sub-theme.
 
 Paper trading only. No real funds are used at any point.
 
@@ -53,18 +53,7 @@ Separately from scoring, the LLM read can also **veto** a decision straight to `
 - **Max 5** concurrent open positions
 - **17.5%** account-level drawdown breaker — trading pauses (new positions only; existing ones still close normally) until a human reviews and calls `POST /resume`. Manual reset is deliberate: an agent that pauses and waits for review demonstrates risk discipline; one that quietly auto-resumes just demonstrates a delay.
 - **2%** stop-loss per position, checked on its own faster timer independent of the main diagnostic cycle
-- **1-hour hold window** per position — closes automatically at expiry regardless of what the diagnostic says by then
-
-## The dashboard — "Signal Deck"
-
-Single HTML file, no build step, no framework. A few things worth pointing out if you're reading the code:
-
-- **Hero stat card** — Realized P&L gets visual priority over the other three overview stats, not equal billing
-- **Conviction pulse chart** — SVG line chart of the last 60 diagnostic cycles for a pair, dots color-coded by state, dashed guide lines at the 30/70 thresholds
-- **Breakdown strip** — Diagnosed/Inconclusive/Fault counts, Long/Short counts, average conviction, net $ impact, for the pair's visible log window
-- **Open position readout** — a 2-column instrument cluster (not a stacked list): direction, entry/current price, live unrealized P&L, stop-loss proximity, and a hold-window progress bar showing elapsed/remaining minutes
-- **News read panel** — the actual headlines the LLM was given, its bias/veto call, confidence score, and which provider (Qwen or Groq) answered
-- Phone back-button is intercepted properly (`pushState`/`popstate`) so it closes the detail view instead of leaving the page entirely
+- **1-hour hold window** per position — closes automatically at expiry regardless of what the diagnostic says by then. 
 
 ## Project structure
 
@@ -148,4 +137,4 @@ Every pair reading `FAULT` simultaneously for an extended stretch is **expected 
 
 ---
 
-Built by Wisdom — TechCraft & Coding By Wisdom.
+Built by — TechCraft & Coding By Wisdom.
