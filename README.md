@@ -4,6 +4,8 @@ An autonomous diagnostic trading agent, Agentic Trading track, Event-Driven Agen
 
 Paper trading only. No real funds are used at any point.
 
+Agent Link : https://diagnos-production-1844.up.railway.app
+
 ## Screenshots
 
 ![Overview board](screenshots/overview.png)
