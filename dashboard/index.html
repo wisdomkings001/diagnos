@@ -287,14 +287,13 @@ body{
 </div>
 <div id="detail" style="display:none">
   <div class="sec"><span id="dTitle">Detail</span> &nbsp;·&nbsp; <a href="#" id="back" style="color:var(--acc);font-weight:700;font-size:13px;text-decoration:underline">&larr; Back to board</a></div>
-  <div class="deck"><div class="panel p-pulse"><div class="ptitle"><span>Conviction pulse</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">last 60 cycles</span></div>
+  <div class="deck"><div class="panel p-pulse"><div class="ptitle"><span>Conviction pulse</span></div>
     <div class="pulsewrap">
       <div class="pulse-legend"><span><i class="sw dx"></i>Diagnosed</span><span><i class="sw inc"></i>Inconclusive</span><span><i class="sw flt"></i>Fault</span></div>
       <svg id="pulseSvg" viewBox="0 0 1000 160" preserveAspectRatio="none"></svg>
       <div class="pulse-empty" id="pulseEmpty" style="display:none">No diagnostic cycles logged yet for this pair.</div>
     </div>
   </div>
-  <div class="panel p-bd"><div class="ptitle"><span>Breakdown</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">this window</span></div>
     <div class="bd">
       <div class="c"><div class="k">Diagnosed</div><div class="v" id="bdDx" style="color:var(--dx)">0</div></div>
       <div class="c"><div class="k">Inconclusive</div><div class="v" id="bdInc" style="color:var(--inc)">0</div></div>
@@ -307,7 +306,7 @@ body{
   </div>
   <div class="panel"><div class="ptitle"><span>Open position</span></div><div id="openBox">—</div></div>
   <div class="panel"><div class="ptitle"><span>News read</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">Qwen -&gt; Groq</span></div><div id="newsBox"></div></div>
-  </div><div class="grid2">
+  <div class="grid2">
     <div class="panel"><div class="ptitle"><span>Diagnostic log</span><span id="logN"></span></div><div class="log" id="log"></div></div>
     <div class="panel"><div class="ptitle"><span>Closed trades</span><span id="pnlN"></span></div><div class="log" id="pnl"></div></div>
   </div>
@@ -445,7 +444,7 @@ async function detail(pair){
     renderNews(d?d.news:null);
   }catch(e){$('openBox').innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12.5px">Could not load position.</div>'}
   try{var l=await J('/log?n=80&pair='+encodeURIComponent(pair));
-    $('logN').textContent=l.length+' entries';
+    $('logN').textContent='last '+l.length+' entries';
     drawPulse(l);renderBreakdown(l);
     $('log').innerHTML=l.slice().reverse().slice(0,60).map(function(r){
       return '<div class="lrow"><span class="tm">'+ft(r.timestamp)+'</span><span class="tag '+cls(r.state)+'">'+r.state+'</span><span class="rs">'+((r.direction||'').toUpperCase())+' — '+(r.reason||'')+' '+newsTag(r.reason)+'</span><span style="font-family:var(--mono);text-align:right">'+r.convictionScore+'</span></div>';
