@@ -294,7 +294,6 @@ body{
       <div class="pulse-empty" id="pulseEmpty" style="display:none">No diagnostic cycles logged yet for this pair.</div>
     </div>
   </div>
-  <div class="panel p-bd"><div class="ptitle"><span>Breakdown</span><span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">this window</span></div>
     <div class="bd">
       <div class="c"><div class="k">Diagnosed</div><div class="v" id="bdDx" style="color:var(--dx)">0</div></div>
       <div class="c"><div class="k">Inconclusive</div><div class="v" id="bdInc" style="color:var(--inc)">0</div></div>
@@ -445,7 +444,7 @@ async function detail(pair){
     renderNews(d?d.news:null);
   }catch(e){$('openBox').innerHTML='<div style="padding:16px 18px;font-family:var(--mono);font-size:12.5px">Could not load position.</div>'}
   try{var l=await J('/log?n=80&pair='+encodeURIComponent(pair));
-    $('logN').textContent=l.length+' entries';
+    $('logN').textContent='last '+l.length+' entries';
     drawPulse(l);renderBreakdown(l);
     $('log').innerHTML=l.slice().reverse().slice(0,60).map(function(r){
       return '<div class="lrow"><span class="tm">'+ft(r.timestamp)+'</span><span class="tag '+cls(r.state)+'">'+r.state+'</span><span class="rs">'+((r.direction||'').toUpperCase())+' — '+(r.reason||'')+' '+newsTag(r.reason)+'</span><span style="font-family:var(--mono);text-align:right">'+r.convictionScore+'</span></div>';
