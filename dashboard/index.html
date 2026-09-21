@@ -278,6 +278,7 @@ body{
 </div>
 <div class="risk" id="riskBox">
   <div class="rk"><div><div class="k">Drawdown breaker</div><div class="n" id="rkState">—</div></div><div class="d" id="rkSub">—</div></div>
+  <div class="rk" id="resumeRow" style="display:none;grid-column:1/-1;border-color:var(--flt)"><button id="resumeBtn" style="width:100%;background:var(--flt);border:none;color:#fff;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.04em;padding:10px;border-radius:var(--r);cursor:pointer;text-transform:uppercase">Resume trading</button></div>
   <div class="rk"><div><div class="k">Drawdown</div><div class="n" id="rkDd">—</div></div><div class="d" id="rkLim">limit —</div></div>
   <div class="rk"><div><div class="k">Open positions</div><div class="n" id="rkOpen">—</div></div><div class="d">max 5 / 5%</div></div>
   <div class="rk"><div><div class="k">News layer</div><div class="n" id="rkNews" style="color:var(--acc)">Qwen -&gt; Groq</div></div><div class="d">veto/nudge</div></div>
@@ -333,6 +334,13 @@ async function J(p,o){if(!EP)throw new Error('no endpoint');var r=await fetch(EP
 function newsTag(reason){reason=reason||'';if(/news|event|llm|qwen|groq|veto|headlines/i.test(reason))return '<span class="news">news-read</span>';return ''}
 $('epIn').value=EP;
 $('epGo').onclick=function(){var v=$('epIn').value.trim().replace(/\/$/,'');if(v){EP=v;localStorage.setItem('diagnos_endpoint',v);$('conn').classList.remove('show');loop()}};
+$('resumeBtn').onclick=async function(){
+  if(!confirm('Resume trading? Only do this after reviewing why the breaker tripped.'))return;
+  var btn=this;btn.disabled=true;btn.textContent='Resuming...';
+  try{await J('/resume',{method:'POST'});await loop()}
+  catch(e){alert('Could not resume — check the connection.')}
+  finally{btn.disabled=false;btn.textContent='Resume trading'}
+};
 function renderTop(s){
   var pairs=s.pairs||[];var ds=pairs.map(function(p){return s.lastDecisionByPair?s.lastDecisionByPair[p]:null}).filter(Boolean);
   $('dxN').textContent=ds.filter(function(d){return d.state==='DIAGNOSED'}).length;
@@ -361,6 +369,7 @@ function renderRisk(r){
   $('rkLim').textContent='limit '+(((r.drawdownLimitPct||0.175)*100).toFixed(1))+'% · peak '+fm(r.peakBalance||0);
   $('rkOpen').textContent=(r.openPositionCount||0)+' open';
   $('rkSub').textContent='trips: '+((r.trips||[]).length);
+  $('resumeRow').style.display=paused?'block':'none';
 }
 async function topPnl(){
   try{var p=await J('/pnl?n=9999');var t=p.totalRealizedPnl||0;
